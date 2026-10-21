@@ -1,3 +1,4 @@
+import { createClient } from '@supabase/supabase-js';
 import http from 'node:http';
 import { randomUUID, scryptSync, timingSafeEqual, randomBytes, createHash } from 'node:crypto';
 import fs from 'node:fs';
