@@ -7,6 +7,16 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3000);
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SECRET_KEY,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  }
+);
 const MAX_BODY = 1_000_000;
 const MIME = { '.html':'text/html; charset=utf-8', '.css':'text/css; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.svg':'image/svg+xml', '.png':'image/png', '.jpg':'image/jpeg', '.ico':'image/x-icon', '.json':'application/json; charset=utf-8', '.txt':'text/plain; charset=utf-8' };
 const telemetry = [];
