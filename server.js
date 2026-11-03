@@ -86,14 +86,46 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/auth/me') { const user=currentUser(req); return json(res,200,{authenticated:Boolean(user),user:user?publicUser(user):null}); }
     if (req.method === 'POST' && url.pathname === '/api/auth/register') {
       const body=await readBody(req); const email=typeof body.email==='string'?body.email.trim().toLowerCase():''; const password=typeof body.password==='string'?body.password:'';
-      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254) return json(res,400,{error:'Informe um e-mail válido.'});
+      if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)||email.length>254) return json(res,400,{error:'Informe um e-mail válido.'});
       if(password.length<10||password.length>128) return json(res,400,{error:'A senha deve ter entre 10 e 128 caracteres.'});
-      if(store.users.some(u=>u.email===email)) return json(res,409,{error:'Já existe uma conta com este e-mail.'});
-      const ph=passwordHash(password); const user={id:randomUUID(),email,...{salt:ph.salt,passwordHash:ph.hash},createdAt:new Date().toISOString()}; store.users.push(user); saveStore(); setSession(res,user); return json(res,201,{user:publicUser(user)});
+      if(!process.env.SUPABASE_SECRET_KEY) return json(res,503,{error:'Autenticação Supabase não configurada.'});
+      const created=await supabase.auth.admin.createUser({email,password,email_confirm:true});
+      if(created.error) return json(res,created.error.status===422?409:400,{error:created.error.message?.toLowerCase().includes('already')?'Já existe uma conta com este e-mail.':created.error.message||'Não foi possível criar a conta.'});
+      const user={id:created.data.user.id,email,createdAt:created.data.user.created_at||new Date().toISOString()};
+      if(!store.users.some(u=>u.id===user.id)){store.users.push(user);saveStore();}
+      setSession(res,user); return json(res,201,{user:publicUser(user)});
     }
     if (req.method === 'POST' && url.pathname === '/api/auth/login') {
-      const body=await readBody(req); const email=typeof body.email==='string'?body.email.trim().toLowerCase():''; const password=typeof body.password==='string'?body.password:''; const user=store.users.find(u=>u.email===email);
-      if(!user||!verifyPassword(password,user)) return json(res,401,{error:'E-mail ou senha incorretos.'}); setSession(res,user); return json(res,200,{user:publicUser(user)});
+      const body=await readBody(req); const email=typeof body.email==='string'?body.email.trim().toLowerCase():''; const password=typeof body.password==='string'?body.password:'';
+      const anon=process.env.SUPABASE_ANON_KEY;
+      if(!anon) return json(res,503,{error:'Configure SUPABASE_ANON_KEY nas variáveis do Render.'});
+      const response=await fetch(`${process.env.SUPABASE_URL}/auth/v1/token?grant_type=password`,{method:'POST',headers:{apikey:anon,'Content-Type':'application/json'},body:JSON.stringify({email,password})});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok) return json(res,401,{error:'E-mail ou senha incorretos.'});
+      let user=store.users.find(u=>u.id===data.user.id);
+      if(!user){user={id:data.user.id,email:data.user.email,createdAt:data.user.created_at||new Date().toISOString()};store.users.push(user);saveStore();}
+      setSession(res,user); return json(res,200,{user:publicUser(user)});
+    }
+    if (req.method === 'POST' && url.pathname === '/api/auth/forgot-password') {
+      const body=await readBody(req); const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';
+      if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) return json(res,400,{error:'Informe um e-mail válido.'});
+      const anon=process.env.SUPABASE_ANON_KEY;
+      if(!anon) return json(res,503,{error:'Configure SUPABASE_ANON_KEY nas variáveis do Render.'});
+      const redirectTo=`${process.env.APP_URL||`https://${req.headers.host}`}/redefinir-senha.html`;
+      const response=await fetch(`${process.env.SUPABASE_URL}/auth/v1/recover`,{method:'POST',headers:{apikey:anon,'Content-Type':'application/json'},body:JSON.stringify({email,redirect_to:redirectTo})});
+      if(!response.ok){const err=await response.json().catch(()=>({}));return json(res,400,{error:err.msg||err.message||'Não foi possível enviar o e-mail de recuperação.'});}
+      return json(res,200,{ok:true,message:'Se existir uma conta para esse e-mail, enviaremos um link de recuperação.'});
+    }
+    if (req.method === 'POST' && url.pathname === '/api/auth/update-password') {
+      const token=(req.headers.authorization||'').replace(/^Bearer\\s+/i,'');
+      const body=await readBody(req); const password=typeof body.password==='string'?body.password:'';
+      if(!token) return json(res,401,{error:'Link de recuperação inválido ou expirado.'});
+      if(password.length<10||password.length>128) return json(res,400,{error:'A senha deve ter entre 10 e 128 caracteres.'});
+      const verified=await supabase.auth.getUser(token);
+      if(verified.error||!verified.data.user) return json(res,401,{error:'Link de recuperação inválido ou expirado.'});
+      const updated=await supabase.auth.admin.updateUserById(verified.data.user.id,{password});
+      if(updated.error) return json(res,400,{error:updated.error.message||'Não foi possível atualizar a senha.'});
+      return json(res,200,{ok:true});
     }
     if (req.method === 'POST' && url.pathname === '/api/auth/logout') { clearSession(req,res); return json(res,200,{ok:true}); }
     if (req.method === 'GET' && url.pathname === '/api/conversations') { const user=requireUser(req,res); if(!user)return; return json(res,200,{items:store.conversations.filter(c=>c.userId===user.id).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).slice(0,100).map(({id,title,updatedAt,messages})=>({id,title,updatedAt,messages}))}); }
