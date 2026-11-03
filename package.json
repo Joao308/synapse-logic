@@ -1,9 +1,18 @@
+
 {
   "name": "synapse-logic-platform",
   "version": "0.1.0",
   "private": true,
   "description": "MVP da plataforma Synapse Logic: chat IA, análise de dados e demonstração Edge/IoT.",
   "type": "module",
-  "scripts": { "start": "node server.js", "check": "node --check server.js && node --check app.js" },
-  "engines": { "node": ">=18.17" }
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check app.js"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2"
+  }
 }
