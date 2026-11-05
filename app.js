@@ -8,6 +8,7 @@ function setAuthMode(mode){state.authMode=mode;$('#forgotPassword').classList.to
 async function authRequest(path,body){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Não foi possível autenticar.');return d}
 async function bootstrapAuth(){try{const r=await fetch('/api/auth/me');const d=await r.json();if(d.authenticated){state.user=d.user;showAuthenticated();await loadSavedConversation()}else{$('#authOverlay').classList.remove('hidden');$('#accountPill').classList.remove('visible')}}catch{$('#authOverlay').classList.remove('hidden');$('#authError').textContent='Não foi possível conectar ao servidor.'}}
 function showAuthenticated(){$('#authOverlay').classList.add('hidden');$('#accountPill').classList.add('visible');$('#accountEmail').textContent=state.user.email;checkHealth()}
+setAuthMode('login');
 $('#authToggle').addEventListener('click',()=>setAuthMode(state.authMode==='login'?'register':'login'));
 $('#forgotPassword').addEventListener('click',async()=>{const email=$('#authEmail').value.trim();if(!email){$('#authError').textContent='Informe seu e-mail primeiro.';$('#authEmail').focus();return}const btn=$('#forgotPassword');btn.disabled=true;$('#authError').textContent='Enviando link...';try{const d=await authRequest('/api/auth/forgot-password',{email});$('#authError').textContent=d.message||'Confira sua caixa de entrada e a pasta de spam.'}catch(err){$('#authError').textContent=err.message}finally{btn.disabled=false}});
 
