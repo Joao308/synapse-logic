@@ -28,7 +28,7 @@ form.addEventListener('submit', async (event) => {
   try {
     const response = await fetch('/api/auth/update-password', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
       body: JSON.stringify({
         access_token: accessToken,
         refresh_token: refreshToken,
