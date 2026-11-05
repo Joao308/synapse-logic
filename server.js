@@ -86,7 +86,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/auth/me') { const user=currentUser(req); return json(res,200,{authenticated:Boolean(user),user:user?publicUser(user):null}); }
     if (req.method === 'POST' && url.pathname === '/api/auth/register') {
       const body=await readBody(req); const email=typeof body.email==='string'?body.email.trim().toLowerCase():''; const password=typeof body.password==='string'?body.password:'';
-      if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)||email.length>254) return json(res,400,{error:'Informe um e-mail válido.'});
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254) return json(res,400,{error:'Informe um e-mail válido.'});
       if(password.length<10||password.length>128) return json(res,400,{error:'A senha deve ter entre 10 e 128 caracteres.'});
       if(!process.env.SUPABASE_SECRET_KEY) return json(res,503,{error:'Autenticação Supabase não configurada.'});
       const created=await supabase.auth.admin.createUser({email,password,email_confirm:true});
@@ -108,7 +108,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && url.pathname === '/api/auth/forgot-password') {
       const body=await readBody(req); const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';
-      if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) return json(res,400,{error:'Informe um e-mail válido.'});
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json(res,400,{error:'Informe um e-mail válido.'});
       const anon=process.env.SUPABASE_ANON_KEY;
       if(!anon) return json(res,503,{error:'Configure SUPABASE_ANON_KEY nas variáveis do Render.'});
       const redirectTo=`${process.env.APP_URL||`https://${req.headers.host}`}/redefinir-senha.html`;
