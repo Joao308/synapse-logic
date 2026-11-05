@@ -117,8 +117,10 @@ const server = http.createServer(async (req, res) => {
       return json(res,200,{ok:true,message:'Se existir uma conta para esse e-mail, enviaremos um link de recuperação.'});
     }
     if (req.method === 'POST' && url.pathname === '/api/auth/update-password') {
-      const token=(req.headers.authorization||'').replace(/^Bearer\\s+/i,'');
-      const body=await readBody(req); const password=typeof body.password==='string'?body.password:'';
+      const body=await readBody(req);
+      const authHeader=req.headers.authorization||'';
+      const token=authHeader.replace(/^Bearer\s+/i,'').trim() || (typeof body.access_token==='string'?body.access_token.trim():'');
+      const password=typeof body.password==='string'?body.password:'';
       if(!token) return json(res,401,{error:'Link de recuperação inválido ou expirado.'});
       if(password.length<10||password.length>128) return json(res,400,{error:'A senha deve ter entre 10 e 128 caracteres.'});
       const verified=await supabase.auth.getUser(token);
