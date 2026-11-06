@@ -1,9 +1,26 @@
 <!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Redefinir senha · Synapse Logic</title><style>
-*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f8fafc;color:#1e293b;font:16px system-ui;padding:24px}.card{width:min(100%,430px);background:white;padding:32px;border:1px solid #e2e8f0;border-radius:20px;box-shadow:0 20px 60px #0f172a12}h1{margin:0 0 8px}p{color:#64748b;line-height:1.5}label{display:block;margin:18px 0 8px;font-weight:600}input{width:100%;padding:13px;border:1px solid #cbd5e1;border-radius:10px;font:inherit}button{width:100%;margin-top:20px;padding:14px;border:0;border-radius:10px;background:#2563eb;color:white;font-weight:700;font-size:15px;cursor:pointer}#msg{min-height:24px;color:#b91c1c}
-</style></head><body><main class="card"><h1>Nova senha</h1><p>Crie uma nova senha para acessar sua conta Synapse Logic.</p><form id="reset"><label for="password">Nova senha</label><input id="password" type="password" minlength="10" maxlength="128" autocomplete="new-password" required placeholder="Mínimo de 10 caracteres"><label for="confirm">Confirme a senha</label><input id="confirm" type="password" minlength="10" maxlength="128" autocomplete="new-password" required><button id="submit">Salvar nova senha</button><p id="msg" role="status"></p></form></main><script>
-const msg=document.querySelector('#msg'),btn=document.querySelector('#submit');
-document.querySelector('#reset').addEventListener('submit',async e=>{e.preventDefault();const p=document.querySelector('#password').value,c=document.querySelector('#confirm').value;if(p.length<10){msg.textContent='A senha precisa ter pelo menos 10 caracteres.';return}if(p!==c){msg.textContent='As senhas não coincidem.';return}
-const hash=new URLSearchParams(location.hash.slice(1)),token=hash.get('access_token'),type=hash.get('type');if(!token||type!=='recovery'){msg.textContent='Link inválido ou expirado. Solicite outro e-mail de recuperação.';return}
-btn.disabled=true;msg.textContent='Atualizando senha...';try{const r=await fetch('/api/auth/update-password',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({password:p})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Não foi possível atualizar a senha.');msg.style.color='#15803d';msg.textContent='Senha atualizada! Você já pode voltar ao login.';setTimeout(()=>location.href='/',2200)}catch(err){msg.textContent=err.message}finally{btn.disabled=false}});
-</script></body></html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Redefinir senha · Synapse Logic</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#080d19;color:#eef2ff;font:16px system-ui;padding:24px}.card{width:min(100%,460px);background:#121c2e;padding:32px;border:1px solid #334155;border-radius:22px;box-shadow:0 20px 60px #0005}h1{margin:0 0 8px;font-size:28px}p{color:#aab6ca;line-height:1.5}label{display:block;margin:18px 0 8px;font-weight:600}input{width:100%;padding:14px;border:1px solid #334155;border-radius:12px;background:#091222;color:#fff;font:inherit}button{width:100%;margin-top:22px;padding:15px;border:0;border-radius:12px;background:linear-gradient(100deg,#8b5cf6,#6476e8);color:white;font-weight:700;font-size:16px;cursor:pointer}button:disabled{opacity:.6;cursor:wait}#message{min-height:24px;margin-top:16px;overflow-wrap:anywhere;color:#fca5a5}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Crie uma nova senha</h1>
+    <p>Use pelo menos 10 caracteres. Depois, volte ao login da Synapse Logic.</p>
+    <form id="resetForm">
+      <label for="newPassword">Nova senha</label>
+      <input id="newPassword" type="password" minlength="10" maxlength="128" autocomplete="new-password" required placeholder="Mínimo de 10 caracteres">
+      <label for="confirmPassword">Confirme a nova senha</label>
+      <input id="confirmPassword" type="password" minlength="10" maxlength="128" autocomplete="new-password" required placeholder="Digite novamente" />
+      <button id="resetButton" type="submit">Salvar senha</button>
+    </form>
+    <p id="message" role="status" aria-live="polite"></p>
+  </main>
+  <script src="/redefinir-senha.js" defer></script>
+</body>
+</html>
