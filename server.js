@@ -74,6 +74,65 @@ async function callAI(input, instructions) {
   return { configured:true, text:output || 'A IA não retornou texto nesta resposta.' };
 }
 
+
+async function callOpenRouter(messages, model) {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) throw Object.assign(new Error('OpenRouter não está configurado no Render.'), { status:503 });
+  if (typeof model !== 'string' || !model.endsWith(':free') || !/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._:-]+$/.test(model)) {
+    throw Object.assign(new Error('Selecione um modelo gratuito válido do OpenRouter.'), { status:400 });
+  }
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method:'POST',
+    headers:{ Authorization:`Bearer ${key}`, 'Content-Type':'application/json', 'HTTP-Referer':process.env.APP_URL || 'https://synapselogic.app', 'X-Title':'Synapse Logic' },
+    body:JSON.stringify({ model, messages, max_tokens:1200 })
+  });
+  const data = await response.json().catch(()=>({}));
+  if (!response.ok) {
+    const err = new Error(data.error?.message || `OpenRouter respondeu com erro (${response.status}).`);
+    err.status = response.status === 429 ? 429 : 502; throw err;
+  }
+  const text = data.choices?.[0]?.message?.content;
+  if (typeof text !== 'string' || !text.trim()) throw Object.assign(new Error('O modelo não retornou texto.'),{status:502});
+  return { text, model:data.model || model, provider:'openrouter' };
+}
+
+async function callGemini(messages, model) {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw Object.assign(new Error('Gemini não está configurado no Render.'), { status:503 });
+  const selected = typeof model === 'string' && /^gemini-[a-zA-Z0-9._-]+$/.test(model) ? model : (process.env.GEMINI_MODEL || 'gemini-2.5-flash');
+  const contents = messages.filter(m=>m.role!=='system').map(m=>({ role:m.role==='assistant'?'model':'user', parts:[{text:m.content}] }));
+  const system = messages.find(m=>m.role==='system')?.content || 'Você é Synapse AI, assistente da plataforma Synapse Logic. Responda em português brasileiro por padrão, com clareza e sem inventar informações.';
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(selected)}:generateContent?key=${encodeURIComponent(key)}`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ systemInstruction:{parts:[{text:system}]}, contents, generationConfig:{maxOutputTokens:1200} })
+  });
+  const data = await response.json().catch(()=>({}));
+  if (!response.ok) {
+    const err = new Error(data.error?.message || `Gemini respondeu com erro (${response.status}).`);
+    err.status = response.status === 429 ? 429 : 502; throw err;
+  }
+  const text = data.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('') || '';
+  if (!text.trim()) throw Object.assign(new Error('Gemini não retornou texto.'),{status:502});
+  return { text, model:selected, provider:'gemini' };
+}
+
+async function listFreeModels() {
+  const models = [];
+  if (process.env.OPENROUTER_API_KEY) {
+    try {
+      const r = await fetch('https://openrouter.ai/api/v1/models', { headers:{ Authorization:`Bearer ${process.env.OPENROUTER_API_KEY}` } });
+      const d = await r.json();
+      if (r.ok && Array.isArray(d.data)) {
+        for (const m of d.data.filter(x => Number(x.pricing?.prompt)===0 && Number(x.pricing?.completion)===0).slice(0,40)) {
+          if (m.id && m.id.endsWith(':free')) models.push({ provider:'openrouter', id:m.id, name:m.name || m.id, free:true });
+        }
+      }
+    } catch {}
+  }
+  if (process.env.GEMINI_API_KEY) models.unshift({ provider:'gemini', id:process.env.GEMINI_MODEL || 'gemini-2.5-flash', name:'Gemini 2.5 Flash', free:true });
+  return models;
+}
+
 const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options','nosniff');
   res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');
@@ -82,7 +141,8 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   try {
-    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok:true, aiConfigured:Boolean(process.env.OPENAI_API_KEY), model:process.env.OPENAI_MODEL || 'gpt-6-astra', edgeMode:'demo-and-ingestion', authEnabled:true, timestamp:new Date().toISOString() });
+    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok:true, aiConfigured:Boolean(process.env.OPENAI_API_KEY||process.env.OPENROUTER_API_KEY||process.env.GEMINI_API_KEY), providers:{openrouter:Boolean(process.env.OPENROUTER_API_KEY),gemini:Boolean(process.env.GEMINI_API_KEY),openai:Boolean(process.env.OPENAI_API_KEY)}, model:process.env.OPENAI_MODEL || 'Selecione um modelo', edgeMode:'demo-and-ingestion', authEnabled:true, timestamp:new Date().toISOString() });
+    if (req.method === 'GET' && url.pathname === '/api/ai/models') { const models=await listFreeModels(); return json(res,200,{models,providers:{openrouter:Boolean(process.env.OPENROUTER_API_KEY),gemini:Boolean(process.env.GEMINI_API_KEY)}}); }
     if (req.method === 'GET' && url.pathname === '/api/auth/me') { const user=currentUser(req); return json(res,200,{authenticated:Boolean(user),user:user?publicUser(user):null}); }
     if (req.method === 'POST' && url.pathname === '/api/auth/register') {
       const body=await readBody(req); const email=typeof body.email==='string'?body.email.trim().toLowerCase():''; const password=typeof body.password==='string'?body.password:'';
@@ -141,9 +201,13 @@ const server = http.createServer(async (req, res) => {
       const messages = Array.isArray(body.messages) ? body.messages.slice(-12) : [];
       if (!messages.length || !messages.every(m => ['user','assistant'].includes(m.role) && typeof m.content === 'string')) return json(res, 400, { error:'Envie uma conversa válida.' });
       if (messages.some(m => m.content.length > 8000)) return json(res, 413, { error:'Cada mensagem deve ter até 8.000 caracteres.' });
-      const result = await callAI(messages.map(m => ({ role:m.role, content:[{ type:'input_text', text:m.content }] })), 'Você é Synapse AI, assistente da plataforma Synapse Logic. Responda em português brasileiro por padrão, seja claro e não invente dados, medições, integrações ou testes. Diferencie fatos de hipóteses.');
-      if (!result.configured) return json(res, 503, { error:'IA não configurada. Adicione OPENAI_API_KEY no ambiente do servidor e reinicie a aplicação. Nenhuma resposta simulada será apresentada como IA real.' });
-      return json(res, 200, { text:result.text, model:process.env.OPENAI_MODEL || 'gpt-6-astra' });
+      const provider = body.provider === 'gemini' ? 'gemini' : body.provider === 'openrouter' ? 'openrouter' : (process.env.DEFAULT_AI_PROVIDER || 'openrouter');
+      const chatMessages = [{role:'system',content:'Você é Synapse AI, assistente da plataforma Synapse Logic. Responda em português brasileiro por padrão, seja claro e não invente dados, medições, integrações ou testes. Diferencie fatos de hipóteses.'}, ...messages];
+      let result;
+      if (provider === 'gemini') result = await callGemini(chatMessages, body.model);
+      else if (provider === 'openrouter') result = await callOpenRouter(chatMessages, body.model);
+      else return json(res,400,{error:'Provedor de IA inválido.'});
+      return json(res, 200, { text:result.text, model:result.model, provider:result.provider });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/analytics/insight') {
