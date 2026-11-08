@@ -129,7 +129,19 @@ async function listFreeModels() {
       }
     } catch {}
   }
-  if (process.env.GEMINI_API_KEY) models.unshift({ provider:'gemini', id:process.env.GEMINI_MODEL || 'gemini-2.5-flash', name:'Gemini 2.5 Flash', free:true });
+ if (process.env.GEMINI_API_KEY) {
+  const id = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+  const name = id === 'gemini-3.8-flash'
+    ? 'Gemini 3.8 Flash'
+    : id;
+
+  models.unshift({
+    provider: 'gemini',
+    id,
+    name,
+    free: true
+  });
+}
   return models;
 }
 
